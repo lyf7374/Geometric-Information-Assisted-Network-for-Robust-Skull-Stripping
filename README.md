@@ -29,23 +29,23 @@ The directory structure is organized as follows:
 - `GI_extration.ipynb` — Jupyter notebook for GI extraction
 - `evaluation.py` — Evaluation script on multiple datasets
 - `MNI152_T1_1mm_brain.nii.gz` — Standard MNI brain template
-- `mni_icbm152_t1_*.nii` — Sample image and mask files
 - `README.md` — This documentation file
 
 ## Usage
 
 ### 1. Extract Geometric Information (GI)
-
-Run the notebook:
-
-```bash
 GI_extration.ipynb
-This demonstrates how to extract geometric priors using the MNI template and the support logic found in:
-datasets/GI_generate_support.py
+with datasets/GI_generate_support.py
 
 ### 2. Train GINet
 python GINet_train.py
 
-3. Evaluate the Model
+### 3. Evaluate the Model
 python evaluation.py
+
+## Status
+
+This repository is currently under active development. We will complete and release the full version soon. Stay tuned!
+
+
 
