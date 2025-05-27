@@ -2,20 +2,16 @@
 
 ## Abstract
 
-Skull stripping, the process of isolating brain tissue from non-brain structures in MRI data, is a critical step in neuroimaging workflows. While deep learning–based methods have shown promise in brain extraction, they often struggle with generalization across diverse datasets due to patient variability, dataset differences, and the presence of pathological conditions. This limitation arises from their reliance on local texture patterns, which makes them sensitive to input variations.
+Skull stripping—the process of isolating brain tissue from non-brain structures in MRI data—is a critical step in neuro-imaging workflows. Although deep-learning methods have shown promise in brain extraction, they often struggle to generalize across diverse datasets because of patient variability, scanner differences, and pathological conditions. This limitation stems from their reliance on local texture patterns, which makes them sensitive to input variations.
 
-In this work, we present a Geometric-Information-Assisted Network (GINet) that improves skull stripping by fusing geometric information—a texture-invariant prior—into the segmentation pipeline, mitigating variability across subjects and datasets. Specifically, GINet consists of three main components:
+We introduce a **Geometric-Information-Assisted Network (GINet)** that improves skull stripping by fusing geometric information—a texture-invariant prior—into the segmentation pipeline, mitigating variability across subjects and datasets. GINet comprises three primary components:
 
-GI filtering module
-Efficiently extracts lightweight geometric priors from input scans.
+1. **GI filtering module** – efficiently extracts lightweight geometric priors from input scans.  
+2. **GI adaptation module** – adapts a standard brain template to input-specific GI while preserving structural integrity.  
+3. **Deep GI-fused segmentation module** – hierarchically integrates GI with image features for robust segmentation.
 
-GI adaptation module
-Adapts a standard brain template to input-specific GI while preserving structural integrity.
+To further enhance performance, we propose a *multi-depth (MD)* loss that refines feature maps with adaptive GI at multiple scales. Trained exclusively on healthy data, GINet generalizes effectively to unseen healthy and pathological datasets, outperforming classical and state-of-the-art skull-stripping methods.
 
-Deep GI-fused segmentation module
-Hierarchically integrates GI with image features for robust segmentation.
-
-Additionally, we propose a multi-depth (MD) loss function to hierarchically refine feature maps with adaptive GI. Despite being trained solely on healthy data, GINet generalizes effectively to various unseen healthy and pathological datasets. Our results demonstrate substantial improvements in robustness and accuracy over several state-of-the-art skull-stripping methods.
 ## Project Structure
 
 The directory structure is organized as follows:
