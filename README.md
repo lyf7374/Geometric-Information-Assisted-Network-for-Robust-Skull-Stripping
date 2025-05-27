@@ -28,7 +28,7 @@ The directory structure is organized as follows:
 - `GINet_train.py` — Training script for GINet
 - `GI_extration.ipynb` — Jupyter notebook for GI extraction
 - `evaluation.py` — Evaluation script on multiple datasets
-- `MNI152_T1_1mm_brain.nii.gz` — Standard MNI brain template
+- `template/` —Standard MNI152 brain template
 - `README.md` — This documentation file
 
 ## Usage
