@@ -29,6 +29,8 @@ The directory structure is organized as follows:
 
 ## Usage
 
+### Datasets for training
+https://www.ccdataset.com/download
 ### 1. Extract Geometric Information (GI)
 GI_extration.ipynb
 with datasets/GI_generate_support.py
