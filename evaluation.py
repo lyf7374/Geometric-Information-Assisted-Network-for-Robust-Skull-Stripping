@@ -7,10 +7,10 @@ import warnings
 warnings.filterwarnings("ignore")
 from tqdm import tqdm
 from datasets.preprocess import process_scan
-from utils.Gsupport import listdir_nohidden,normalize_radius,convert2GI,model_load,DiceLoss,sub_sampling_blockwise
+from utils.Gsupport import listdir_nohidden,normalize_radius,convert2GI,model_load,sub_sampling_blockwise
 from datasets.load_data import load_H_extra
 from utils.metrics import HausdorffDistance_incase,HausdorffDistance,Loss_all_batch,HausdorffDistance95,Loss_all_batch_each,DiceLoss_batch_each,cal_hd_hd95
-from utils.Gsupport import listdir_nohidden,DiceLoss,DiceLoss_batch
+from utils.Gsupport import listdir_nohidden,DiceLoss_batch
 from model.GINet import GINet_
 import json
 
@@ -95,54 +95,41 @@ if GPU_id !='-1':
     device_ids = list(np.arange(len(GPU_id)//2+1))
     device_ids = [int(device_ids[i]) for i in device_ids]
 
-
 # data preprocessing
 tumor_path_all ='tumor_data'
 tumor_patients = np.load('data_utils/tumor_patients.npy')
 patients=np.load('data_utils/H_patients.npy')
+# for center crop 
 center_h359 = np.load('data_utils/center359.npy')
 center_t125 = np.load('data_utils/centerT125.npy')
 
-
-GI_T = np.load('data_utils/cGI_T_{}rpt_preC.npy'.format(n_pc))
-GI_H = np.load('data_utils/cGI_H_{}rpt_preC.npy'.format(n_pc))
+GI_H = np.load('data_utils/cGI_H_{}rpt_preC_noc.npy'.format(n_pc))
 g_tem = np.load('data_utils/cGI_tem_{}rpt.npy'.format(n_pc))
-
 center_g =np.load('data_utils/gcenter_tem_{}rpt.npy'.format(n_pc)) 
-center_T = np.load('data_utils/center_t125_UnetSeg.npy')
-center_H = np.load('data_utils/center_c359_UnetSeg.npy')
+
 
 g_tem = np.expand_dims(g_tem, axis=0)
-
 g_tem_nor = (g_tem - center_g[np.newaxis,np.newaxis,:]) #  (1,n_pc,3)
-GI_H_nor = GI_H - center_H[:,np.newaxis,:]
-GI_T_nor = GI_T - center_T[:,np.newaxis,:]
-
+GI_H_nor = GI_H - center_g[np.newaxis,np.newaxis,:]
 GI_tem_in  = convert2GI(g_tem_nor,n_patch)
 GI_H_in  =  convert2GI(GI_H_nor,n_patch)
-GI_T_in = convert2GI(GI_T_nor,n_patch)
-
 GI_tem_in[:,:,:3] = GI_tem_in[:,:,:3] + center_g[np.newaxis,np.newaxis,:]
-GI_H_in[:,:,:3] = GI_H_in[:,:,:3] + center_H[:,np.newaxis,:]
-GI_T_in[:,:,:3] = GI_T_in[:,:,:3] + center_T[:,np.newaxis,:]
-
+GI_H_in[:,:,:3] = GI_H_in[:,:,:3] + center_g[np.newaxis,np.newaxis,:]
 normal_min_r = np.min(GI_H_in [:, :, 3])
 normal_max_r = np.max(GI_H_in [:, :, 3])
-
 GI_tem_in  = normalize_radius(GI_H_in,GI_tem_in ,True)
 GI_H_in= normalize_radius(GI_H_in)
-GI_T_in  = normalize_radius(GI_T_in)
 
-r_mean = GI_H_in[:,:,3].mean(axis=0)
-r_std = GI_H_in[:,:,3].std(axis=0)
 
-center_T = [center_T[i] for i in range(len(center_T))]
-center_H = [center_H[i] for i in range(len(center_H))]
-center_T_pre = [center_t125[i] for i in range(len(center_t125))]
+r_mean = GI_H_in[:,indices,3].mean(axis=0)
+r_std = GI_H_in[:,indices,3].std(axis=0)
 center_H_pre = [center_h359[i] for i in range(len(center_h359))]
+center_T_pre = [center_t125[i] for i in range(len(center_t125))]
 
-GI_T = [GI_T_in[i] for i in range(GI_T_in.shape[0])]
 GI_H = [GI_H_in[i] for i in range(GI_H_in.shape[0])]
+
+
+
 images_path = 'H_data' + '/' + 'Original'
 labels_path =  'H_data' + '/' + 'STAPLE'
 
@@ -207,11 +194,10 @@ tumor_brain_masks = tumor_brain_masks_order
 print("Num of Healthy: {}, Tumor: {}" .format(len(skull_brain_path),len(tumor_skull_path)))  
 
 class myDataset(Dataset):
-    def __init__(self, skull_brain_path, brain_mask, g_map ,center,N_H = None, T_all =False, center_pre=None):
+    def __init__(self, skull_brain_path, brain_mask, g_map=None,N_H = None, T_all =False, center_pre=None):
         self.x_path = skull_brain_path
         self.gt_path = brain_mask
         self.g_map = g_map
-        self.center = center
         self.center_pre = center_pre
         self.T_all = T_all
         self.N_H = N_H
@@ -227,11 +213,12 @@ class myDataset(Dataset):
      
         x = x.reshape(reshapes_)   
         y = y .reshape(reshapes_)
-       
-        GI_all = self.g_map[i][indices,:]
-        center_all = self.center[i] 
+        if self.g_map!=None:
+            GI_all = self.g_map[i][indices,:]
+        else:
+            GI_all =  None
 
-        data = (torch.tensor(x).contiguous(),torch.tensor(y).contiguous(), torch.tensor(GI_all).contiguous(), torch.tensor(center_all).contiguous())
+        data = (torch.tensor(x).contiguous(),torch.tensor(y).contiguous(), torch.tensor(GI_all).contiguous())
         return data
 
 skull_T_train = []
@@ -244,11 +231,6 @@ mask_T_unseen =[]
 
 GI_T_train = []
 GI_T_test = []
-GI_T_unseen = []
-
-center_T_train = []
-center_T_test =[]
-center_T_unseen =[]
 
 center_T_train_pre = []
 center_T_test_pre =[]
@@ -268,15 +250,11 @@ else:
 
         skull_T_train += tumor_skull_path[25*(i):25*(i+1)][:17]
         mask_T_train += tumor_brain_masks[25*(i):25*(i+1)][:17]
-        GI_T_train += GI_T[25*(i):25*(i+1)][:17]
-        center_T_train +=center_T[25*(i):25*(i+1)][:17]
         center_T_train_pre +=center_T_pre[25*(i):25*(i+1)][:17]
 
         #######   #######   #######   #######  #######  #######  
         skull_T_test += tumor_skull_path[25*(i):25*(i+1)][17:]
         mask_T_test += tumor_brain_masks[25*(i):25*(i+1)][17:]
-        GI_T_test += GI_T[25*(i):25*(i+1)][17:]
-        center_T_test +=center_T[25*(i):25*(i+1)][17:]
         center_T_test_pre +=center_T_pre[25*(i):25*(i+1)][17:]
         
         unseen_id.remove(i+1)
@@ -285,8 +263,6 @@ for j in unseen_id:
     i = j-1
     skull_T_unseen += tumor_skull_path[25*(i):25*(i+1)]
     mask_T_unseen += tumor_brain_masks[25*(i):25*(i+1)]
-    GI_T_unseen += GI_T[25*(i):25*(i+1)]
-    center_T_unseen +=center_T[25*(i):25*(i+1)]  
     center_T_unseen_pre +=center_T_pre[25*(i):25*(i+1)]       
         
 skull_train_final  = skull_brain_path[:int(len(skull_brain_path)*0.7)] + skull_T_train
@@ -298,20 +274,17 @@ brain_test_final  =  brain_masks[int(len(skull_brain_path)*0.7):] + mask_T_test
 GI_train_final  = GI_H[:int(len(skull_brain_path)*0.7)] + GI_T_train
 GI_test_final  =  GI_H[int(len(skull_brain_path)*0.7):] + GI_T_test
 
-center_train_final  = center_H[:int(len(skull_brain_path)*0.7)] +  center_T_train
-center_test_final  =  center_H[int(len(skull_brain_path)*0.7):] +  center_T_test
-
 center_train_final_pre  = center_H_pre[:int(len(skull_brain_path)*0.7)] +  center_T_train_pre
 center_test_final_pre  =  center_H_pre[int(len(skull_brain_path)*0.7):] +  center_T_test_pre
 
 
-train_dataset = myDataset(skull_train_final,brain_train_final,GI_train_final,center_train_final,n_H_Train,center_pre=center_train_final_pre )
+train_dataset = myDataset(skull_train_final,brain_train_final,g_map = GI_train_final,N_H=n_H_Train,center_pre=center_train_final_pre )
 train_loader = DataLoader(train_dataset,  batch_size=batch_size, shuffle=True)
 
-test_dataset = myDataset(skull_test_final,brain_test_final,GI_test_final,center_test_final,n_H_Test,center_pre=center_test_final_pre  )
+test_dataset = myDataset(skull_test_final,brain_test_final,g_map=None,N_H=n_H_Test,center_pre=center_test_final_pre  )
 test_loader = DataLoader(test_dataset,  batch_size=batch_size, shuffle=False)
 
-unseen_dataset = myDataset(skull_T_unseen,mask_T_unseen, GI_T_unseen,center_T_unseen, T_all =True,center_pre=center_T_unseen_pre)
+unseen_dataset = myDataset(skull_T_unseen,mask_T_unseen, g_map =None, T_all =True,center_pre=center_T_unseen_pre)
 unseen_loader = DataLoader(unseen_dataset,  batch_size=batch_size, shuffle=False)
 
 print('nums in training | test | unseen |  are:',train_loader.__len__()*batch_size, test_loader.__len__()*batch_size, unseen_loader.__len__()*batch_size)
@@ -321,41 +294,15 @@ from datasets.load_data import load_H_extra
 skull_paths_LBPA40, brain_mask_paths_LBPA40, skull_paths_NFBS, brain_mask_paths_NFBS =load_H_extra('Health_extra')
 center_LBPA_pre = np.load('data_utils/center_LBPA_pre.npy')
 center_NFBS_pre = np.load('data_utils/center_NFBS_pre.npy')
-
-
-GI_NFBS = np.load('data_utils/cGI_NFBS_{}rpt_preC.npy'.format(n_pc))
-GI_LBPA = np.load('data_utils/cGI_LBPA_{}rpt_preC.npy'.format(n_pc))
-center_NFBSu = np.load('data_utils/center_NFBS_UnetSeg_T0.npy')
-center_LBPAu = np.load('data_utils/center_LBPA_UnetSeg_T0.npy')
-
-
-GI_NFBS_nor = GI_NFBS - center_NFBSu[:,np.newaxis,:]
-GI_LBPA_nor = GI_LBPA - center_LBPAu[:,np.newaxis,:]
-
-GI_NFBS_in  =  convert2GI(GI_NFBS_nor,n_patch)
-GI_LBPA_in = convert2GI(GI_LBPA_nor,n_patch)
-
-GI_NFBS_in[:,:,:3] = GI_NFBS_in[:,:,:3] + center_NFBSu[:,np.newaxis,:]
-GI_LBPA_in[:,:,:3] = GI_LBPA_in[:,:,:3] + center_LBPAu[:,np.newaxis,:]
-
-
-GI_NFBS_in= normalize_radius(GI_H_in)
-GI_LBPA_in  = normalize_radius(GI_T_in)
-
-center_NFBSu = [center_NFBSu[i] for i in range(len(center_NFBSu))]
-center_LBPAu = [center_LBPAu[i] for i in range(len(center_LBPAu))]
-
 center_NFBS_pre = [center_NFBS_pre[i] for i in range(len(center_NFBS_pre))]
 center_LBPA_pre = [center_LBPA_pre[i] for i in range(len(center_LBPA_pre))]
 
 
-NFBS_dataset = myDataset(skull_paths_NFBS, brain_mask_paths_NFBS, GI_NFBS_in,center_NFBSu,center_pre=center_NFBS_pre)
+NFBS_dataset = myDataset(skull_paths_NFBS, brain_mask_paths_NFBS, g_map =None,center_pre=center_NFBS_pre)
 NFBS_loader = DataLoader(NFBS_dataset,  batch_size=batch_size, shuffle=False)
 
-LBPA_dataset = myDataset(skull_paths_LBPA40, brain_mask_paths_LBPA40, GI_LBPA_in,center_LBPAu,center_pre=center_LBPA_pre)
+LBPA_dataset = myDataset(skull_paths_LBPA40, brain_mask_paths_LBPA40,  g_map =None,center_pre=center_LBPA_pre)
 LBPA_loader = DataLoader(LBPA_dataset,  batch_size=batch_size, shuffle=False)
-
-
 print('model name:',final_save_name)
 
 
@@ -455,12 +402,13 @@ def evaluate_model(model, data_loader, eval_all_metrics=False, base=False):
         'HD': []
     }
     with torch.no_grad():
-        for skull_brain, brain_gt, _, center in data_loader:
+        for skull_brain, brain_gt, _ in data_loader:
             B = skull_brain.shape[0]
             coors_tem_in = coors_tem.repeat(B, 1, 1)
             coors_tem_in[:, :3, :]  = Tensor(coors_tem_in[:, :3, :] / 191.0).requires_grad_(False)
             label_img = brain_gt.type(Tensor)
             img = skull_brain.type(Tensor)
+            center =  Tensor(center_g).unsqueeze(0).repeat(B, 1)
             _, y_pred, _ = model(img, coors_tem_in, center)
 
 

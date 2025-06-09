@@ -79,7 +79,7 @@ indices, points = sub_sampling_blockwise(
 )
 
 
-final_save_name = 'T0_Files/SG_sdf_v5.pth'
+final_save_name = 'T0_Files/SG.pth'
 print('model name:',model_index, final_save_name)
 
 
@@ -98,53 +98,31 @@ if GPU_id !='-1':
 tumor_path_all ='tumor_data'
 tumor_patients = np.load('data_utils/tumor_patients.npy')
 patients=np.load('data_utils/H_patients.npy')
+# for center crop 
 center_h359 = np.load('data_utils/center359.npy')
-center_t125 = np.load('data_utils/centerT125.npy')
 
-
-if args.n_pc !=4096:
-    GI_T = np.load('data_utils/cGI_T_{}rpt.npy'.format(n_pc))
-    GI_H = np.load('data_utils/cGI_H_{}rpt.npy'.format(n_pc))
-else:
-    GI_T = np.load('data_utils/cGI_T_{}rpt_preC.npy'.format(n_pc))
-    GI_H = np.load('data_utils/cGI_H_{}rpt_preC.npy'.format(n_pc))
-
+GI_H = np.load('data_utils/cGI_H_{}rpt_preC_noc.npy'.format(n_pc))
 g_tem = np.load('data_utils/cGI_tem_{}rpt.npy'.format(n_pc))
-
 center_g =np.load('data_utils/gcenter_tem_{}rpt.npy'.format(n_pc)) 
-center_T = np.load('data_utils/center_t125_UnetSeg.npy')
-center_H = np.load('data_utils/center_c359_UnetSeg.npy')
+
+
 g_tem = np.expand_dims(g_tem, axis=0)
-
 g_tem_nor = (g_tem - center_g[np.newaxis,np.newaxis,:]) #  (1,n_pc,3)
-GI_H_nor = GI_H - center_H[:,np.newaxis,:]
-GI_T_nor = GI_T - center_T[:,np.newaxis,:]
-
+GI_H_nor = GI_H - center_g[np.newaxis,np.newaxis,:]
 GI_tem_in  = convert2GI(g_tem_nor,n_patch)
 GI_H_in  =  convert2GI(GI_H_nor,n_patch)
-GI_T_in = convert2GI(GI_T_nor,n_patch)
-
 GI_tem_in[:,:,:3] = GI_tem_in[:,:,:3] + center_g[np.newaxis,np.newaxis,:]
-GI_H_in[:,:,:3] = GI_H_in[:,:,:3] + center_H[:,np.newaxis,:]
-GI_T_in[:,:,:3] = GI_T_in[:,:,:3] + center_T[:,np.newaxis,:]
-
+GI_H_in[:,:,:3] = GI_H_in[:,:,:3] + center_g[np.newaxis,np.newaxis,:]
 normal_min_r = np.min(GI_H_in [:, :, 3])
 normal_max_r = np.max(GI_H_in [:, :, 3])
-
 GI_tem_in  = normalize_radius(GI_H_in,GI_tem_in ,True)
 GI_H_in= normalize_radius(GI_H_in)
-GI_T_in  = normalize_radius(GI_T_in)
+
 
 r_mean = GI_H_in[:,indices,3].mean(axis=0)
 r_std = GI_H_in[:,indices,3].std(axis=0)
-
-
-center_T = [center_T[i] for i in range(len(center_T))]
-center_H = [center_H[i] for i in range(len(center_H))]
-center_T_pre = [center_t125[i] for i in range(len(center_t125))]
 center_H_pre = [center_h359[i] for i in range(len(center_h359))]
 
-GI_T = [GI_T_in[i] for i in range(GI_T_in.shape[0])]
 GI_H = [GI_H_in[i] for i in range(GI_H_in.shape[0])]
 images_path = 'H_data' + '/' + 'Original'
 labels_path =  'H_data' + '/' + 'STAPLE'
@@ -178,43 +156,11 @@ for j in range(len(patients)):
 skull_brain_path = skull_brain_path_order
 brain_masks = brain_masks_order
 
-tumor_skull_path = []
-tumor_brain_masks = []
-
-for data_folder in listdir_nohidden(tumor_path_all):
-    folder_path = tumor_path_all + '/' + data_folder
-    
-    files =[]
-    for p_fold in listdir_nohidden(folder_path):
-        files.append(p_fold)    
-    tumor_skull_path.append(folder_path + '/' + 'T1C.nii.gz')
-    if 'T1C_brain_mask_mc.nii.gz' in files:
-        tumor_brain_masks.append(folder_path + '/' + 'T1C_brain_mask_mc.nii.gz')
-    elif 'T1C_brain_mask_m.nii.gz' in files:
-        tumor_brain_masks.append(folder_path + '/' + 'T1C_brain_mask_m.nii.gz')
-    else:
-        print('error  ',folder_path)
-    
-tumor_skull_path_order = []
-tumor_brain_masks_order = []
-
-for j in range(len(tumor_patients)):
-    for i in range(len(tumor_skull_path)):
-        if tumor_patients[j] == tumor_skull_path[i].split('/')[-2]:
-            tumor_skull_path_order.append(tumor_skull_path[i])
-    for i in range(len(tumor_brain_masks)):
-        if tumor_patients[j] == tumor_brain_masks[i].split('/')[-2]:
-            tumor_brain_masks_order.append(tumor_brain_masks[i])
-tumor_skull_path = tumor_skull_path_order
-tumor_brain_masks = tumor_brain_masks_order  
-print("Num of Healthy: {}, Tumor: {}" .format(len(skull_brain_path),len(tumor_skull_path)))  
-
 class myDataset(Dataset):
-    def __init__(self, skull_brain_path, brain_mask, g_map ,center,N_H = None, T_all =False, center_pre=None):
+    def __init__(self, skull_brain_path, brain_mask, g_map ,N_H = None, T_all =False, center_pre=None):
         self.x_path = skull_brain_path
         self.gt_path = brain_mask
         self.g_map = g_map
-        self.center = center
         self.center_pre = center_pre
         self.T_all = T_all
         self.N_H = N_H
@@ -233,30 +179,9 @@ class myDataset(Dataset):
        
         GI_all = self.g_map[i][indices,:]
       
-        center_all = self.center[i] 
-
-        data = (torch.tensor(x).contiguous(),torch.tensor(y).contiguous(), torch.tensor(GI_all).contiguous(), torch.tensor(center_all).contiguous())
+        data = (torch.tensor(x).contiguous(),torch.tensor(y).contiguous(), torch.tensor(GI_all).contiguous())
         return data
 
-skull_T_train = []
-skull_T_test = []
-skull_T_unseen = []
-
-mask_T_train =[]
-mask_T_test =[]
-mask_T_unseen =[]
-
-GI_T_train = []
-GI_T_test = []
-GI_T_unseen = []
-
-center_T_train = []
-center_T_test =[]
-center_T_unseen =[]
-
-center_T_train_pre = []
-center_T_test_pre =[]
-center_T_unseen_pre =[]
 
 n_H_Train = int(len(skull_brain_path)*0.7)
 n_H_Test = len(skull_brain_path[int(len(skull_brain_path)*0.7):])
@@ -264,61 +189,31 @@ n_H_Test = len(skull_brain_path[int(len(skull_brain_path)*0.7):])
 print('n_H_Train: {}, n_H_Test: {}'.format(n_H_Train,n_H_Test))
 
 unseen_id = [1,2,3,4,5]
-
-if T_id <= 0:
-    pass
-else:
-    for i in range(T_id):
-
-        skull_T_train += tumor_skull_path[25*(i):25*(i+1)][:17]
-        mask_T_train += tumor_brain_masks[25*(i):25*(i+1)][:17]
-        GI_T_train += GI_T[25*(i):25*(i+1)][:17]
-        center_T_train +=center_T[25*(i):25*(i+1)][:17]
-        center_T_train_pre +=center_T_pre[25*(i):25*(i+1)][:17]
-
-        #######   #######   #######   #######  #######  #######  
-        skull_T_test += tumor_skull_path[25*(i):25*(i+1)][17:]
-        mask_T_test += tumor_brain_masks[25*(i):25*(i+1)][17:]
-        GI_T_test += GI_T[25*(i):25*(i+1)][17:]
-        center_T_test +=center_T[25*(i):25*(i+1)][17:]
-        center_T_test_pre +=center_T_pre[25*(i):25*(i+1)][17:]
+     
         
-        unseen_id.remove(i+1)
-        
-for j in unseen_id:
-    i = j-1
-    skull_T_unseen += tumor_skull_path[25*(i):25*(i+1)]
-    mask_T_unseen += tumor_brain_masks[25*(i):25*(i+1)]
-    GI_T_unseen += GI_T[25*(i):25*(i+1)]
-    center_T_unseen +=center_T[25*(i):25*(i+1)]  
-    center_T_unseen_pre +=center_T_pre[25*(i):25*(i+1)]       
-        
-skull_train_final  = skull_brain_path[:int(len(skull_brain_path)*0.7)] + skull_T_train
-skull_test_final  =  skull_brain_path[int(len(skull_brain_path)*0.7):] + skull_T_test
+skull_train_final  = skull_brain_path[:int(len(skull_brain_path)*0.7)] 
+skull_test_final  =  skull_brain_path[int(len(skull_brain_path)*0.7):] 
 
-brain_train_final  = brain_masks[:int(len(skull_brain_path)*0.7)] + mask_T_train
-brain_test_final  =  brain_masks[int(len(skull_brain_path)*0.7):] + mask_T_test
+brain_train_final  = brain_masks[:int(len(skull_brain_path)*0.7)] 
+brain_test_final  =  brain_masks[int(len(skull_brain_path)*0.7):] 
 
-GI_train_final  = GI_H[:int(len(skull_brain_path)*0.7)] + GI_T_train
-GI_test_final  =  GI_H[int(len(skull_brain_path)*0.7):] + GI_T_test
-
-center_train_final  = center_H[:int(len(skull_brain_path)*0.7)] +  center_T_train
-center_test_final  =  center_H[int(len(skull_brain_path)*0.7):] +  center_T_test
-
-center_train_final_pre  = center_H_pre[:int(len(skull_brain_path)*0.7)] +  center_T_train_pre
-center_test_final_pre  =  center_H_pre[int(len(skull_brain_path)*0.7):] +  center_T_test_pre
+GI_train_final  = GI_H[:int(len(skull_brain_path)*0.7)] 
+GI_test_final  =  GI_H[int(len(skull_brain_path)*0.7):] 
 
 
-train_dataset = myDataset(skull_train_final,brain_train_final,GI_train_final,center_train_final,n_H_Train,center_pre=center_train_final_pre )
+
+center_train_final_pre  = center_H_pre[:int(len(skull_brain_path)*0.7)] 
+center_test_final_pre  =  center_H_pre[int(len(skull_brain_path)*0.7):]
+
+
+train_dataset = myDataset(skull_train_final,brain_train_final,GI_train_final,n_H_Train,center_pre=center_train_final_pre )
 train_loader = DataLoader(train_dataset,  batch_size=batch_size, shuffle=True, num_workers=0)
 
-test_dataset = myDataset(skull_test_final,brain_test_final,GI_test_final,center_test_final,n_H_Test,center_pre=center_test_final_pre  )
+test_dataset = myDataset(skull_test_final,brain_test_final,GI_test_final,n_H_Test,center_pre=center_test_final_pre  )
 test_loader = DataLoader(test_dataset,  batch_size=batch_size, shuffle=False, num_workers=0)
 
-unseen_dataset = myDataset(skull_T_unseen,mask_T_unseen, GI_T_unseen,center_T_unseen, T_all =True,center_pre=center_T_unseen_pre)
-unseen_loader = DataLoader(unseen_dataset,  batch_size=batch_size, shuffle=False, num_workers=0)
 
-print('nums in training | test | unseen |  are:',train_loader.__len__()*batch_size, test_loader.__len__()*batch_size, unseen_loader.__len__()*batch_size)
+print('nums in training | test | unseen |  are:',train_loader.__len__()*batch_size, test_loader.__len__()*batch_size)
 
 
 cuda = True if torch.cuda.is_available() else False
@@ -429,11 +324,11 @@ for epoch in range(start_epoch, n_epochs):
     adjust_learning_rate(optimizer_d, LR, epoch)  # adjust lr
 
 
-    for i, (skull_brain,brain_gt,GI_all, center) in enumerate(train_loader):
+    for i, (skull_brain,brain_gt,GI_all) in enumerate(train_loader):
         B = skull_brain.shape[0]
         coors_tem_in = coors_tem.repeat(B,1,1)
         coors_tem_in[:, :3, :]  = Tensor(coors_tem_in[:, :3, :] / 191.0).requires_grad_(False)
-
+        center =  Tensor(center_g).unsqueeze(0).repeat(B, 1)
         img = skull_brain.type(Tensor)
 
         label_r = GI_all[:,:,3].type(Tensor)
@@ -471,11 +366,11 @@ for epoch in range(start_epoch, n_epochs):
             loss_r_list = []
             loss_dice_list = []
             loss_dice_list_eval = []
-            for i, (skull_brain, brain_gt, GI_all, center) in enumerate(test_loader):
+            for i, (skull_brain, brain_gt, GI_all) in enumerate(test_loader):
                 B = skull_brain.shape[0]
                 coors_tem_in = coors_tem.repeat(B, 1, 1)
                 coors_tem_in[:, :3, :]  = Tensor(coors_tem_in[:, :3, :] / 191.0).requires_grad_(False)
-
+                center =  Tensor(center_g).unsqueeze(0).repeat(B, 1)
                 img = skull_brain.type(Tensor)
 
                 label_r = GI_all[:, :, 3].type(Tensor)
@@ -493,52 +388,21 @@ for epoch in range(start_epoch, n_epochs):
                 loss_dice_list.append(loss_d.detach().cpu().item()  if epoch > 20 else 0)
                 loss_dice_list_eval.append(eval_d.detach().cpu().item()  if epoch > 20 else 0)
 
-            eval_l_T = []
-            loss_r_list_T= []
-            loss_dice_list_T = []
-            loss_dice_list_T_eval = []
-            for i, (skull_brain, brain_gt, GI_all, center) in enumerate(unseen_loader):
-                B = skull_brain.shape[0]
-                coors_tem_in = coors_tem.repeat(B, 1, 1)
-                coors_tem_in[:, :3, :]  = Tensor(coors_tem_in[:, :3, :] / 191.0).requires_grad_(False)
-
-                img = skull_brain.type(Tensor)
-
-                label_r = GI_all[:, :, 3].type(Tensor)
-                # label_coor = (GI_all[:, :, :3] / 191.0).type(Tensor)
-                label_img = brain_gt.type(Tensor)
-
-                r_out, y_refined,ys_pre = model(img, coors_tem_in, center)
-                loss_r = loss_MSE(r_out.view(B, -1), label_r.view(B, -1))
-
-                if epoch > 20:
-                    loss_d = loss_Dice(y_refined,ys_pre,label_img)
-                    eval_d = eval_Dice(y_refined,label_img)
-
-                eval_l_T.append(loss_r.detach().cpu().item() + loss_d.item() if epoch > 20 else loss_r.detach().cpu().item())
-                loss_r_list_T.append(loss_r.detach().cpu().item())
-                loss_dice_list_T.append(loss_d.detach().cpu().item()  if epoch > 20 else 0)
-                loss_dice_list_T_eval.append(eval_d.detach().cpu().item()  if epoch > 20 else 0)
 
             eval_c_H = np.mean(eval_l)
             avg_loss_r_H = np.mean(loss_r_list)
             avg_loss_dice_H = np.mean(loss_dice_list)
             avg_loss_dice_H_eval = np.mean(loss_dice_list_eval)
 
-            eval_c_T = np.mean(eval_l_T)
-            avg_loss_r_T = np.mean(loss_r_list_T)
-            avg_loss_dice_T = np.mean(loss_dice_list_T)
-            avg_loss_dice_T_eval = np.mean(loss_dice_list_T_eval)
-
             eval_c =  eval_c_H
 
             loss_eval_list.append(eval_c)
             print('model name:',model_index, final_save_name)
             print(f"Epoch {epoch},  Healthy Loss: {eval_c_H}, H Loss R: {avg_loss_r_H}, H Loss CD: 0, H Loss Dice: {avg_loss_dice_H}")
-            print(f"Epoch {epoch},  Tumor Loss: {eval_c_T}, T Loss R: {avg_loss_r_T}, T Loss CD: 0, T Loss Dice: {avg_loss_dice_T}")
+
             print('evaluation', eval_c)
             print(f"Real Dice  H :  {avg_loss_dice_H_eval}")
-            print(f"Real Dice  T :  {avg_loss_dice_T_eval}")
+
             if (eval_c > eval_best_c) and (epoch>20):
                 stop_flag += 1
             elif (eval_c <= eval_best_c) and (epoch>20):
