@@ -29,8 +29,12 @@ The directory structure is organized as follows:
 
 ## Usage
 
-### Datasets for training
-https://www.ccdataset.com/download
+### Download Datasets
+#### for training
+CC359: https://www.ccdataset.com/download
+#### for evaluation
+NFBS: http://preprocessed-connectomes-project.org/NFB_skullstripped/
+LPBA: https://loni.usc.edu/research/atlases
 ### 1. Extract Geometric Information (GI)
 GI_extration.ipynb
 with datasets/GI_generate_support.py
